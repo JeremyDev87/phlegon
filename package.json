@@ -1,0 +1,10 @@
+{
+  "name": "phlegon",
+  "version": "0.1.0",
+  "description": "Browser performance diagnosis through installed Codex or Claude Code",
+  "type": "module",
+  "engines": { "node": ">=24" },
+  "bin": { "phlegon": "bin/phlegon.mjs" },
+  "files": ["bin/", "lib/", "SKILL.md"],
+  "scripts": { "test": "node --test" }
+}
