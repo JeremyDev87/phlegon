@@ -83,20 +83,17 @@ phlegon 에이전트에 index.html의 반복 렌더링 진단을 위임해줘. �
 
 네이티브 에이전트는 부모 세션의 권한과 도구를 상속합니다. 읽기 전용 진단은 부모 세션도 읽기 전용으로 시작하십시오. 역할 파일 자체가 별도 샌드박스를 만들지는 않습니다. [Codex 에이전트 문서](https://developers.openai.com/codex/subagents)
 
-역할을 찾지 못하면 새 일반 세션에서 파일을 직접 지정할 수 있습니다. Codex 0.159.0의 `--ignore-user-config`를 사용한 격리 검증에서는 프로젝트 역할 자동 발견이 실패했고, 명시적 등록으로 실제 자식 에이전트의 파일 읽기와 결과 반환을 확인했습니다. 자동 발견 실패의 원인은 확정하지 않았습니다. 아래 `/absolute/project`를 신뢰하는 프로젝트의 실제 절대 경로로 바꾸십시오. 설정은 이 호출에만 적용되며 전역 설정 파일을 수정하지 않습니다.
+프로젝트 역할을 읽으려면 해당 프로젝트가 신뢰된 상태여야 합니다. Codex 0.159.0에서 아래 읽기 전용 호출로 복사한 `.codex/agents/phlegon.toml`의 자동 발견, 실제 자식 에이전트의 파일 읽기와 결과 반환을 확인했습니다. 별도 프로젝트 설정 파일이나 명시적 역할 등록은 필요하지 않았습니다. `/absolute/project` 두 곳을 심볼릭 링크를 해소한 같은 실제 절대 경로로 바꾸고 따옴표를 유지하십시오. 공백이 있는 경로도 이 따옴표 안에 넣습니다. 신뢰 설정은 이 호출에만 적용되며 전역 설정 파일을 수정하지 않습니다.
 
 ```bash
 codex -a never exec --ignore-user-config --disable hooks --disable plugins \
   --sandbox read-only --skip-git-repo-check --json --enable multi_agent \
-  -C /absolute/project \
-  -c 'projects."/absolute/project".trust_level="trusted"' \
-  -c 'agents.phlegon.description="Phlegon native browser performance diagnosis"' \
-  -c 'agents.phlegon.config_file="/absolute/project/.codex/agents/phlegon.toml"' \
-  -c 'history.persistence="none"' -- \
+  -C "/absolute/project" \
+  -c 'projects={"/absolute/project"={trust_level="trusted"}}' -- \
   'spawn_agent 도구의 agent_type phlegon으로 index.html 진단을 위임해줘. 도구로 파일을 읽고 수정 없이 결과를 반환하게 한 뒤 기다려줘.'
 ```
 
-이 버전의 검증에서는 `--ephemeral`을 넣으면 자식 생성 시 `no rollout found`가 발생했습니다. 네이티브 위임에는 위와 같이 `--ephemeral`을 제외하십시오. `history.persistence="none"`이어도 호스트의 세션 실행 기록은 남습니다. 이 명령은 훅·플러그인을 끄므로 해당 도구가 필요한 측정은 별도로 확인해야 합니다.
+신뢰 설정에는 위의 인라인 테이블 형식을 사용하십시오. 이 버전에서는 `-c 'projects."/absolute/project".trust_level="trusted"'`의 경로 따옴표가 키의 일부로 처리되어 실제 프로젝트를 신뢰하지 못했습니다. 또한 `--ephemeral`을 넣으면 자식 생성 시 `no rollout found`가 발생했으므로 위 호출에서는 제외했습니다. 호스트의 일반 세션 실행 기록은 남습니다. 이 명령은 훅·플러그인을 끄므로 해당 도구가 필요한 측정은 별도로 확인해야 합니다.
 
 ### 4. 터미널 CLI
 
