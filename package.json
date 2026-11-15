@@ -6,5 +6,5 @@
   "engines": { "node": ">=24" },
   "bin": { "phlegon": "bin/phlegon.mjs" },
   "files": ["bin/", "lib/", "SKILL.md"],
-  "scripts": { "test": "node --test" }
+  "scripts": { "test": "node scripts/sync-agents.mjs --check && node --test" }
 }
