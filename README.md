@@ -42,11 +42,11 @@ $phlegon 검색 화면을 구현하고 입력 중 끊김이 생길 수 있는 �
 
 ### 2. Claude Code 플러그인
 
-이하 `/path/to/phlegon`은 이 저장소를 받은 경로입니다. 위 스킬 설치 경로를 그대로 사용해도 됩니다. 플러그인을 지원하는 Claude Code에서 작업할 프로젝트로 이동한 뒤 실행합니다.
+이하 `/path/to/phlegon`은 이 저장소를 받은 경로입니다. 위 스킬 설치 경로를 그대로 사용해도 됩니다. Claude 플러그인은 기존 Codex 스킬 검색과 분리된 `.plugins/claude`에 있습니다. 플러그인을 지원하는 Claude Code에서 작업할 프로젝트로 이동한 뒤 실행합니다.
 
 ```bash
 cd /path/to/project
-claude --plugin-dir /path/to/phlegon
+claude --plugin-dir /path/to/phlegon/.plugins/claude
 ```
 
 대화에서 에이전트 이름을 지정합니다.
@@ -60,7 +60,7 @@ Agent 도구로 phlegon:phlegon 에이전트에 위임해줘. index.html의 반�
 비대화형 호출에서는 옵션 뒤에 `--`를 두어 요청과 경로를 구분합니다.
 
 ```bash
-claude --plugin-dir /path/to/phlegon -p --permission-mode plan -- \
+claude --plugin-dir /path/to/phlegon/.plugins/claude -p --permission-mode plan -- \
   'Agent 도구로 phlegon:phlegon에 index.html 진단을 위임하고 결과를 기다려줘. 수정하지 마.'
 ```
 
