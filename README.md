@@ -68,6 +68,8 @@ claude --plugin-dir /path/to/phlegon/.plugins/claude -p --permission-mode plan -
 
 프로젝트별 에이전트를 지원하는 Codex가 필요합니다. 프로젝트 루트에서 아래 명령으로 자체 지침이 포함된 TOML 한 파일을 복사합니다. 기존 파일이 있으면 덮어쓰지 않고 실패하므로, 내용을 확인한 뒤 직접 업데이트하십시오.
 
+설치 전에 프로젝트의 `.codex` 또는 `.codex/agents`가 심볼릭 링크라면 실제 대상을 확인하십시오. 링크가 프로젝트 밖을 가리키면 역할 파일은 그 대상에 생성되며, 공유 설정을 사용하는 다른 프로젝트에도 영향을 줄 수 있습니다.
+
 ```bash
 cd "/path/to/project" && \
   test -f "/path/to/phlegon/.codex/agents/phlegon.toml" && \
