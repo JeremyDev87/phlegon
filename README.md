@@ -45,8 +45,8 @@ $phlegon 검색 화면을 구현하고 입력 중 끊김이 생길 수 있는 �
 이하 `/path/to/phlegon`은 이 저장소를 받은 경로입니다. 위 스킬 설치 경로를 그대로 사용해도 됩니다. Claude 플러그인은 기존 Codex 스킬 검색과 분리된 `.plugins/claude`에 있습니다. 플러그인을 지원하는 Claude Code에서 작업할 프로젝트로 이동한 뒤 실행합니다.
 
 ```bash
-cd /path/to/project
-claude --plugin-dir /path/to/phlegon/.plugins/claude
+cd "/path/to/project" && \
+  claude --plugin-dir "/path/to/phlegon/.plugins/claude"
 ```
 
 대화에서 에이전트 이름을 지정합니다.
@@ -69,10 +69,10 @@ claude --plugin-dir /path/to/phlegon/.plugins/claude -p --permission-mode plan -
 프로젝트별 에이전트를 지원하는 Codex가 필요합니다. 프로젝트 루트에서 아래 명령으로 자체 지침이 포함된 TOML 한 파일을 복사합니다. 기존 파일이 있으면 덮어쓰지 않고 실패하므로, 내용을 확인한 뒤 직접 업데이트하십시오.
 
 ```bash
-cd /path/to/project
-test -f /path/to/phlegon/.codex/agents/phlegon.toml && \
-  mkdir -p .codex/agents && \
-  (set -C; cat /path/to/phlegon/.codex/agents/phlegon.toml > .codex/agents/phlegon.toml)
+cd "/path/to/project" && \
+  test -f "/path/to/phlegon/.codex/agents/phlegon.toml" && \
+  mkdir -p ".codex/agents" && \
+  (set -C; cat "/path/to/phlegon/.codex/agents/phlegon.toml" > ".codex/agents/phlegon.toml")
 ```
 
 프로젝트에서 새 Codex 세션을 열고 역할을 지정합니다.
@@ -119,9 +119,11 @@ phlegon --engine codex --cwd /path/to/project --fix --timeout 600 -- \
 
 `--cwd` 기본값은 현재 디렉터리, 제한 시간은 300초이며 `--timeout`은 1–3600초를 받습니다. 요청은 `--` 뒤의 인자 하나 또는 표준 입력으로 전달하며 최대 64 KiB입니다. 기본 동작은 진단이며, `--fix`도 요청한 범위와 호스트 권한 안에서만 수정을 허용합니다. 신뢰하는 프로젝트와 `PATH`의 실행기만 사용하십시오.
 
-CLI는 공통 지침을 실행기에 전달하는 래퍼입니다. 네이티브 에이전트를 등록하거나 위임하지 않습니다. Codex 진단은 `read-only`, 수정은 `workspace-write` 샌드박스를 사용합니다. Claude 진단은 `plan` 권한과 `Read,Glob,Grep`만 사용하므로 셸·브라우저 측정은 할 수 없습니다. Claude 수정도 제한된 내장 파일 도구와 `acceptEdits` 범위에서 동작합니다.
+CLI는 공통 지침을 실행기에 전달하는 래퍼입니다. 네이티브 에이전트를 등록하거나 위임하지 않습니다. Codex는 기본 진단에 `read-only`, `--fix` 수정에 `workspace-write` 샌드박스를 요청합니다. Claude 진단은 `plan` 권한과 `Read,Glob,Grep`만 사용하므로 셸·브라우저 측정은 할 수 없습니다. Claude 수정도 제한된 내장 파일 도구와 `acceptEdits` 범위에서 동작합니다.
 
-CLI는 Codex 사용자 설정 로드를 끄고 Claude는 `--safe-mode`로 실행합니다. 따라서 평소 대화에서 쓰던 사용자 MCP·플러그인·훅·브라우저 도구를 그대로 사용할 수 있다고 가정하지 마십시오. 관리 정책은 계속 적용됩니다. 필요한 도구나 기준 측정이 없으면 그 한계를 보고하며, 권한을 자동으로 넓히지 않습니다.
+CLI의 Codex `--ignore-user-config`는 `config.toml` 로드를 건너뛰지만 호스트 `.rules`는 유지하므로, `allow` 규칙에 일치하는 명령은 샌드박스 밖에서 실행될 수 있습니다. [Codex 규칙 문서](https://developers.openai.com/codex/rules)
+
+Claude는 `--safe-mode`로 실행합니다. 평소 대화에서 쓰던 사용자 MCP·플러그인·훅·브라우저 도구를 그대로 사용할 수 있다고 가정하지 마십시오. 관리 정책은 계속 적용됩니다. 필요한 도구나 기준 측정이 없으면 그 한계를 보고하며, 권한을 자동으로 넓히지 않습니다.
 
 ## 결과 읽기
 
@@ -142,6 +144,10 @@ CLI는 검증된 응답을 다음 필드의 JSON 객체 하나로 출력합니�
 - `summary`, `evidence`, `nextCheck`는 문자열입니다. 근거에는 조건과 실제 관찰을, 다음 확인에는 남은 검증을 기록합니다. 네이티브·스킬도 같은 보고 의미를 따르며 CLI가 JSON 형식을 검증합니다.
 
 잘못된 입력, `blocked`, 실행기 실패, 시간 초과, 잘못되거나 너무 큰 출력은 0이 아닌 종료 코드를 반환합니다. 실행 오류는 원본 로그 대신 짧은 메시지로 stderr에 출력합니다. `blocked`는 검증된 전후 비교를 주장할 수 없습니다. 기준 측정이나 도구가 없거나 기능·접근성·이벤트 동작이 깨졌다면 성능 개선으로 보고하지 않습니다.
+
+## 지침 갱신
+
+기여자는 `SKILL.md` 변경 후 `node scripts/sync-agents.mjs`로 배포 지침을 갱신하고, `npm test`로 생성 파일 일치 여부와 테스트를 확인하십시오.
 
 ## 배경
 
