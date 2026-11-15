@@ -9,11 +9,13 @@ import { runHost } from '../lib/process.mjs';
 
 const help = `Usage: phlegon --engine codex|claude [--cwd DIR] [--fix] [--timeout SECONDS] [-- TASK]
 Node >=24; macOS/Linux. Task: one argument after -- or stdin, at most 64 KiB.
-Diagnosis is read-only. --fix permits only explicitly requested edits.
+Diagnosis requests a read-only host mode.
+Existing Codex allow rules can run matching commands outside the sandbox.
+--fix permits only explicitly requested edits within host permissions.
 Timeout: 300 seconds by default, 1..3600. Trust the selected project and PATH.
 Uses existing host authentication; managed host policies still apply.
 Only a validated report is printed; completed does not verify improvement.
-Raw host logs are discarded. No automatic login or permission bypass.
+Raw host logs are discarded. No automatic login.
 `;
 
 async function readTask(timeout) {
