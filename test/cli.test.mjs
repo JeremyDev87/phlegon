@@ -7,6 +7,8 @@ import { mkdtemp, mkdir, readFile, readdir, realpath, rm, symlink, writeFile } f
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { setTimeout as delay } from 'node:timers/promises';
+import { runHost } from '../lib/process.mjs';
 
 const cli = fileURLToPath(new URL('../bin/phlegon.mjs', import.meta.url));
 const fixture = `#!${process.execPath}
@@ -19,9 +21,10 @@ const codex = path.basename(process.argv[1]) === 'codex';
 let input = '';
 process.stdin.setEncoding('utf8');
 process.stdin.on('data', data => input += data);
-process.stdin.on('end', () => {
+process.stdin.on('end', async () => {
   fs.writeFileSync(process.env.RECEIPT, JSON.stringify({args, cwd: process.cwd(), input, pid: process.pid}));
   const mode = process.env.MODE;
+  if (mode === 'delayed') await new Promise(resolve => setTimeout(resolve, 1300));
   if (mode === 'exit') { process.stderr.write('PRIVATE_HOST_LOG'); process.exit(7); }
   if (mode === 'malformed') { console.log('PRIVATE_HOST_LOG'); return; }
   if (mode === 'stdout' || mode === 'stderr') { process[mode].write('x'.repeat(1100000)); setInterval(() => {}, 1000); return; }
@@ -31,16 +34,21 @@ process.stdin.on('end', () => {
     fs.writeFileSync(process.env.READY, JSON.stringify([process.pid, child.pid]));
     setInterval(() => {}, 1000); return;
   }
-  const report = {status: mode === 'blocked' || mode === 'blocked-comparison' ? 'blocked' : 'completed', measurement: mode === 'blocked-comparison' ? 'improved' : 'unmeasured', summary: fs.readFileSync('index.html','utf8'), evidence: 'Fixture read in selected directory; no browser comparison.', nextCheck:'Run a comparable browser check.'};
+  const report = {status: mode.startsWith('blocked') ? 'blocked' : 'completed', measurement: mode === 'blocked-comparison' ? process.env.MEASUREMENT : mode === 'blocked-observed' ? 'observed' : 'unmeasured', summary: fs.readFileSync('index.html','utf8'), evidence: 'Fixture read in selected directory; no browser comparison.', nextCheck:'Run a comparable browser check.'};
+  if (mode === 'multilingual' || mode === 'astral') {
+    report.summary = report.evidence = report.nextCheck = (mode === 'astral' ? '😀' : '한').repeat(8000);
+  }
+  const serialize = value => JSON.stringify(value).replace(/[\u0080-\uffff]/g, char => '\\\\u' + char.charCodeAt(0).toString(16).padStart(4, '0'));
   if (mode === 'bad-field') report.summary = 3;
+  if (mode === 'long-field') report.summary = '😀'.repeat(8001);
   if (mode === 'extra-field') report.extra = true;
   if (codex) {
     const destination = option('--output-last-message');
     if (mode === 'symlink') fs.symlinkSync(path.join(process.cwd(), 'index.html'), destination);
-    else fs.writeFileSync(destination, mode === 'large-final' ? 'x'.repeat(65537) : JSON.stringify(report));
+    else fs.writeFileSync(destination, mode === 'large-final' ? 'x'.repeat(512 * 1024) : mode === 'astral' ? serialize(report) : JSON.stringify(report));
     console.log(JSON.stringify({type:mode === 'false-success' ? 'turn.failed' : 'turn.completed'}));
     if (mode === 'after-terminal') console.log(JSON.stringify({type:'item.completed'}));
-  } else console.log(JSON.stringify({type:'result',subtype:mode === 'false-success' ? 'error_during_execution' : 'success',is_error:mode === 'false-success',structured_output:report}));
+  } else console.log((mode === 'astral' ? serialize : JSON.stringify)({type:'result',subtype:mode === 'false-success' ? 'error_during_execution' : 'success',is_error:mode === 'false-success',structured_output:report}));
   if (mode === 'stale') process.exitCode = 7;
 });
 `;
@@ -61,10 +69,12 @@ function launch(f, args, input = '') {
   const child = spawn(process.execPath, [cli, ...args], { env: f.env });
   let stdout = '';
   let stderr = '';
+  child.stdout.setEncoding('utf8');
+  child.stderr.setEncoding('utf8');
   child.stdout.on('data', chunk => stdout += chunk);
   child.stderr.on('data', chunk => stderr += chunk);
   child.stdin.on('error', error => { if (error.code !== 'EPIPE') throw error; });
-  child.stdin.end(input);
+  if (input !== null) child.stdin.end(input);
   const done = once(child, 'close').then(([code, signal]) => ({ code, signal, stdout, stderr }));
   return { child, done };
 }
@@ -92,9 +102,10 @@ for (const engine of ['codex', 'claude']) {
     assert.deepEqual(await readdir(f.temp), []);
   });
 
-  for (const mode of ['exit', 'stale', 'malformed', 'stdout', 'stderr', 'false-success', 'bad-field', 'extra-field', 'blocked-comparison', ...(engine === 'codex' ? ['large-final', 'symlink', 'after-terminal'] : [])]) {
+  for (const mode of ['exit', 'stale', 'malformed', 'stdout', 'stderr', 'false-success', 'bad-field', 'long-field', 'extra-field', 'blocked-comparison', ...(engine === 'codex' ? ['large-final', 'symlink', 'after-terminal'] : [])]) {
     test(`${engine} rejects ${mode} without forwarding raw logs and removes temporary files`, async t => {
       const f = await setup(t, mode);
+      f.env.MEASUREMENT = 'improved';
       const result = await launch(f, ['--engine', engine, '--cwd', f.project, '--', 'Read index.html']).done;
       assert.equal(result.code, 1);
       assert.equal(result.stdout, '');
@@ -105,13 +116,50 @@ for (const engine of ['codex', 'claude']) {
       assert.deepEqual(await readdir(f.temp), []);
     });
   }
-  test(`${engine} returns blocked report with nonzero exit`, async t => {
-    const f = await setup(t, 'blocked');
+  for (const mode of ['blocked', 'blocked-observed']) test(`${engine} returns ${mode} report with nonzero exit`, async t => {
+    const f = await setup(t, mode);
     const result = await launch(f, ['--engine', engine, '--cwd', f.project], 'Read index.html').done;
     assert.equal(result.code, 2);
     assert.equal(JSON.parse(result.stdout).status, 'blocked');
+    assert.equal(JSON.parse(result.stdout).measurement, mode === 'blocked-observed' ? 'observed' : 'unmeasured');
+  });
+  for (const mode of ['multilingual', 'astral']) test(`${engine} accepts maximum ${mode} report`, async t => {
+    const f = await setup(t, mode);
+    const result = await launch(f, ['--engine', engine, '--cwd', f.project, '--', 'Read']).done;
+    assert.equal(result.code, 0, result.stderr);
+    const report = JSON.parse(result.stdout);
+    for (const key of ['summary', 'evidence', 'nextCheck']) assert.equal(report[key], (mode === 'astral' ? '😀' : '한').repeat(8000));
+  });
+  for (const measurement of ['unchanged', 'regressed']) test(`${engine} rejects blocked ${measurement}`, async t => {
+    const f = await setup(t, 'blocked-comparison');
+    f.env.MEASUREMENT = measurement;
+    const result = await launch(f, ['--engine', engine, '--cwd', f.project, '--', 'Read']).done;
+    assert.equal(result.code, 1);
+    assert.equal(result.stdout, '');
+  });
+  test(`${engine} shares one timeout across stdin and host`, { timeout: 10000 }, async t => {
+    const f = await setup(t, 'delayed');
+    const { child, done } = launch(f, ['--engine', engine, '--cwd', f.project, '--timeout', '2'], null);
+    t.after(() => { if (child.exitCode === null) child.kill('SIGKILL'); });
+    await delay(1300);
+    child.stdin.end('Read');
+    const result = await done;
+    assert.equal(result.code, 124, result.stderr);
+    assert.equal(result.stdout, '');
+    const receipt = JSON.parse(await readFile(f.env.RECEIPT, 'utf8'));
+    assert.throws(() => process.kill(receipt.pid, 0), { code: 'ESRCH' });
+    assert.deepEqual(await readdir(f.temp), []);
   });
 }
+
+test('exhausted deadline rejects before starting a host', async () => {
+  await assert.rejects(runHost('phlegon-host-that-does-not-exist', [], { cwd: tmpdir(), prompt: 'Read', deadline: performance.now() - 1 }), { exitCode: 124 });
+});
+
+test('successful host completion does not time out during cleanup grace', async () => {
+  const result = await runHost('/bin/sh', ['-c', 'exit 0'], { cwd: tmpdir(), prompt: '', deadline: performance.now() + 100 });
+  assert.equal(result, '');
+});
 
 for (const args of [['--engine', 'invalid'], ['--engine', 'codex', '--unknown'], ['--engine', 'codex', 'no-separator'], ['--engine', 'codex', '--', 'one', 'two'], ['--engine', 'codex', '--timeout', 'NaN'], ['--engine', 'codex', '--timeout', '0'], ['--engine', 'codex', '--fix', '--fix'], ['--engine', 'codex', '--', '']]) {
   test(`rejects invalid input before launching: ${args.join(' ')}`, async t => {
